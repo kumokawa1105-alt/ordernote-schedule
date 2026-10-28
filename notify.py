@@ -13,6 +13,7 @@
 """
 import os
 import sys
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 
 import gspread
@@ -86,24 +87,43 @@ def md(d):
     return f"{d.month}/{d.day}"
 
 
+def width(text):
+    """全角を2、半角を1として表示幅を数える（コードブロック内で列を揃えるため）。"""
+    return sum(2 if unicodedata.east_asian_width(c) in "WFA" else 1 for c in text)
+
+
+def pad(text, w):
+    return text + " " * max(w - width(text), 1)
+
+
+TODAY_MARK = {"開始＆終了日": "← 今日！", "開始日": "← 今日開始！", "終了日": "← 今日終了！"}
+
+
 def build_message(tab, tasks, today):
-    lines = [f"*【{tab}】本日（{today:%Y/%m/%d}）スケジュール通知*", "", "*■ 全体スケジュール*"]
+    no_w = max(width(f"No.{t['no']}") for t in tasks) + 2
+    phase_w = max(width(t["phase"]) for t in tasks) + 2
+    name_w = max(width(t["name"]) for t in tasks) + 2
+    rows = []
     for t in tasks:
-        period = md(t["start"]) if t["start"] == t["end"] else f"{md(t['start'])}〜{md(t['end'])}"
-        owner = f"（{t['owner']}）" if t["owner"] else ""
-        if action_label(t, today):
-            lines.append(f"▶ *No.{t['no']}  {t['phase']}｜{t['name']}*")
-            lines.append(f"　　*{period}*{owner}　← 今日！")
-        else:
-            lines.append(f"No.{t['no']}  {t['phase']}｜{t['name']}")
-            lines.append(f"　　{period}{owner}")
-    lines += ["", "*■ 本日のアクション*"]
+        label = action_label(t, today)
+        row = ("▶ " if label else "  ") + pad(f"No.{t['no']}", no_w) + pad(t["phase"], phase_w)
+        row += "| " + pad(t["name"], name_w) + f"{md(t['start'])}〜{md(t['end'])}"
+        if label:
+            row += "  " + TODAY_MARK[label]
+        rows.append(row)
+    actions = []
     for t in tasks:
         label = action_label(t, today)
         if label:
             owner = f"（担当: {t['owner']}）" if t["owner"] else ""
-            lines.append(f"・[{label}] No.{t['no']} {t['name']}{owner}")
-    return "\n".join(lines)
+            actions.append(f"・[{label}] No.{t['no']} {t['name']}{owner}")
+    return "\n".join([
+        f"*【{tab}】本日（{today:%Y/%m/%d}）スケジュール通知*",
+        "■ 全体スケジュール",
+        "```", *rows, "```",
+        "■ 本日のアクション",
+        *actions,
+    ])
 
 
 def sent_key(today, tab):
