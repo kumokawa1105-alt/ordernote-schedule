@@ -1,0 +1,61 @@
+name: daily-notify
+
+on:
+  schedule:
+    # JST 14時に通知。GitHubのscheduleは遅延・ドロップがあるため保険を2本用意。
+    # 送信済みの日は sent_dates.txt で判定してスキップするので二重送信はしない。
+    - cron: "2 5 * * *"   # JST 14:02（本命）
+    - cron: "32 5 * * *"  # JST 14:32（保険1）
+    - cron: "2 7 * * *"   # JST 16:02（保険2）
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "対象日 YYYY-MM-DD（空なら今日）"
+        required: false
+        default: ""
+      dry:
+        description: "送らず本文確認だけなら true"
+        required: false
+        default: "false"
+
+concurrency:
+  group: daily-notify
+
+permissions:
+  contents: write
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存インストール
+        run: pip install -r requirements.txt
+
+      - name: シークレット復元（.env と 認証JSON）
+        run: |
+          cat > .env <<ENV
+          SLACK_WEBHOOK_ORDERNOTE=${{ secrets.SLACK_WEBHOOK_ORDERNOTE }}
+          SLACK_WEBHOOK_HYPNO=${{ secrets.SLACK_WEBHOOK_HYPNO }}
+          GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}
+          ENV
+          printf '%s' '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > google-credentials.json
+
+      - name: Slackへ通知
+        run: |
+          ARGS=""
+          [ -n "${{ github.event.inputs.date }}" ] && ARGS="${{ github.event.inputs.date }}"
+          [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
+          python notify.py $ARGS
+
+      - name: 送信記録をコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sent_dates.txt
+          git diff --cached --quiet || (git commit -m "sent: $(date -u +%F)" && git push)
