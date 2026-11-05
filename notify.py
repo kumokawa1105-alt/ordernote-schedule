@@ -22,6 +22,7 @@ import requests
 JST = timezone(timedelta(hours=9))
 HERE = os.path.dirname(os.path.abspath(__file__))
 SENT_LOG = os.path.join(HERE, "sent_dates.txt")
+SEND_FROM_HOUR = 14
 
 # 通知するタブ → 送り先Webhookの環境変数名。新しい月のタブはここに1行足す。
 TAB_ROUTES = {
@@ -146,9 +147,15 @@ def main():
     args = sys.argv[1:]
     dry, force = "--dry" in args, "--force" in args
     dates = [a for a in args if not a.startswith("--")]
-    today = date.fromisoformat(dates[0]) if dates else datetime.now(JST).date()
+    now = datetime.now(JST)
+    today = date.fromisoformat(dates[0]) if dates else now.date()
 
-    gc = gspread.service_account(filename=os.path.join(HERE, "google-credentials.json"))
+    # 日付指定なしの自動実行は14時前なら送らない（GitHubのschedule遅延で深夜に翌日分が出るのを防ぐ）
+    if not dates and now.hour < SEND_FROM_HOUR and not dry:
+        print(f"{now:%H:%M} は{SEND_FROM_HOUR}時前のため送信しない")
+        return
+
+    gc =gspread.service_account(filename=os.path.join(HERE, "google-credentials.json"))
     sh = gc.open_by_key(os.environ["GOOGLE_SHEETS_ID"])
     titles = {ws.title: ws for ws in sh.worksheets()}
 

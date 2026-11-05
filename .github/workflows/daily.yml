@@ -1,11 +1,11 @@
 name: daily-notify
 
 on:
+  # 本命は cron-job.org から毎日 JST 14:00 に workflow_dispatch を叩く（GitHubのscheduleは数時間遅れるため）。
+  # 下の schedule は外部起動が失敗した日の保険。14時前の実行は notify.py 側で送らない。
+  # 送信済みの日は sent_dates.txt で判定してスキップするので二重送信はしない。
   schedule:
-    # JST 14時に通知。GitHubのscheduleは遅延・ドロップがあるため保険を2本用意。
-    # 送信済みの日は sent_dates.txt で判定してスキップするので二重送信はしない。
-    - cron: "2 5 * * *"   # JST 14:02（本命）
-    - cron: "32 5 * * *"  # JST 14:32（保険1）
+    - cron: "2 5 * * *"   # JST 14:02（保険1）
     - cron: "2 7 * * *"   # JST 16:02（保険2）
   workflow_dispatch:
     inputs:
@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main  # 遅れて動いた実行でも最新の sent_dates.txt を読む
 
       - uses: actions/setup-python@v5
         with:
