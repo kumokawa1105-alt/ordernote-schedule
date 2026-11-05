@@ -10,7 +10,7 @@
   GOOGLE_SHEETS_ID           工程表スプシのID
   SLACK_WEBHOOK_ORDERNOTE    #オーダーノート_チャレンジローンチ のWebhook
   SLACK_WEBHOOK_HYPNO        #金運ヒプノ_チャレンジローンチ のWebhook
-  SLACK_WEBHOOK_POCKET       12月ポケットの送り先チャンネルのWebhook
+  SLACK_WEBHOOK_POCKET       #スピスタ_チャレンジローンチ のWebhook（ポケット・スピスタ）
 """
 import os
 import sys
@@ -25,13 +25,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SENT_LOG = os.path.join(HERE, "sent_dates.txt")
 SEND_FROM_HOUR = 14
 
-# 通知するタブ → 送り先Webhookの環境変数名。新しい月のタブはここに1行足す。
-TAB_ROUTES = {
-    "11月オーダーノート": "SLACK_WEBHOOK_ORDERNOTE",
-    "12月オーダーノート": "SLACK_WEBHOOK_ORDERNOTE",
-    "11月金運ヒプノ": "SLACK_WEBHOOK_HYPNO",
-    "12月ポケット": "SLACK_WEBHOOK_POCKET",
+# タブ名に含まれる言葉 → 送り先Webhookの環境変数名。
+# 「1月オーダーノート」のようにタブを足すだけで自動で対象になる。新しい商品はここに1行足す。
+KEYWORD_ROUTES = {
+    "オーダーノート": "SLACK_WEBHOOK_ORDERNOTE",
+    "金運ヒプノ": "SLACK_WEBHOOK_HYPNO",
+    "ポケット": "SLACK_WEBHOOK_POCKET",
+    "スピスタ": "SLACK_WEBHOOK_POCKET",
 }
+
+
+def route_for(tab):
+    if "テンプレート" in tab:
+        return None
+    return next((env for kw, env in KEYWORD_ROUTES.items() if kw in tab), None)
 
 
 def load_env():
@@ -159,14 +166,12 @@ def main():
 
     gc =gspread.service_account(filename=os.path.join(HERE, "google-credentials.json"))
     sh = gc.open_by_key(os.environ["GOOGLE_SHEETS_ID"])
-    titles = {ws.title: ws for ws in sh.worksheets()}
-
     sent_any = False
-    for tab, webhook_env in TAB_ROUTES.items():
-        if tab not in titles:
-            print(f"タブが見つかりません: {tab}")
+    for ws in sh.worksheets():
+        tab, webhook_env = ws.title, route_for(ws.title)
+        if not webhook_env:
             continue
-        tasks = read_tasks(titles[tab])
+        tasks = read_tasks(ws)
         if not any(action_label(t, today) for t in tasks):
             continue
         sent_any = True

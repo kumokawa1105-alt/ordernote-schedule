@@ -40,15 +40,17 @@ def collect():
     notify.load_env()
     gc = gspread.service_account(filename=os.path.join(notify.HERE, "google-credentials.json"))
     sh = gc.open_by_key(os.environ["GOOGLE_SHEETS_ID"])
-    titles = {ws.title: ws for ws in sh.worksheets()}
+    today = datetime.now(notify.JST).date()
     launches = []
-    for tab, webhook_env in notify.TAB_ROUTES.items():
-        if tab not in titles:
+    for ws in sh.worksheets():
+        webhook_env = notify.route_for(ws.title)
+        if not webhook_env:
             continue
-        tasks = notify.read_tasks(titles[tab])
-        if tasks:
-            launches.append({"tab": tab, "channel": CHANNELS.get(webhook_env, webhook_env), "tasks": tasks})
-    return launches
+        tasks = notify.read_tasks(ws)
+        # 終わったローンチ（過去の月のタブ）は載せない
+        if tasks and max(t["end"] for t in tasks) >= today:
+            launches.append({"tab": ws.title, "channel": CHANNELS.get(webhook_env, webhook_env), "tasks": tasks})
+    return sorted(launches, key=lambda ln: min(t["start"] for t in ln["tasks"]))
 
 
 def notices(launch):
