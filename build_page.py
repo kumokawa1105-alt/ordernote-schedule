@@ -134,7 +134,8 @@ def render_calendar(launches, today, sent):
         for d, tasks in notices(ln).items():
             events.setdefault(d, []).append((ln, tasks))
     last = max([d for d in events if d >= today], default=today)
-    months, y, m = [], today.year, today.month
+    first_ev = min(events, default=today)
+    months, y, m = [], min(first_ev, today).year, min(first_ev, today).month
     while (y, m) <= (last.year, last.month):
         months.append((y, m))
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
@@ -167,7 +168,14 @@ def render_calendar(launches, today, sent):
                 f'<div class="{cls}"><div class="num">{d.day}<span class="dots">{dots}</span></div>{"".join(chips)}</div>'
             )
             d += timedelta(days=1)
-        out.append(f'<div class="month"><div class="month-title">{y}年{m}月</div><div class="cal">{"".join(cells)}</div></div>')
+        shown = "" if (y, m) == (today.year, today.month) else " hidden"
+        out.append(
+            f'<div class="month"{shown}><div class="month-nav">'
+            f'<button type="button" data-step="-1">◀ 前の月</button>'
+            f'<div class="month-title">{y}年{m}月</div>'
+            f'<button type="button" data-step="1">次の月 ▶</button>'
+            f'</div><div class="cal">{"".join(cells)}</div></div>'
+        )
     return "".join(out)
 
 
@@ -234,7 +242,12 @@ tr.now td.nm {{ font-weight:700; }}
 .legend i {{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }}
 .empty {{ color:var(--muted); }}
 .month {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px; }}
-.month-title {{ font-weight:700; font-size:16px; margin-bottom:8px; }}
+.month-nav {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }}
+.month-title {{ font-weight:700; font-size:16px; }}
+.month-nav button {{ font:inherit; font-size:13px; color:var(--ink); background:var(--bg); border:1px solid var(--line);
+  border-radius:8px; padding:6px 12px; cursor:pointer; }}
+.month-nav button:hover {{ border-color:var(--muted); }}
+.month-nav button:disabled {{ opacity:.35; cursor:default; }}
 .cal {{ display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; }}
 .dow {{ text-align:center; font-size:12px; color:var(--muted); padding:2px 0; }}
 .day {{ min-height:92px; border:1px solid var(--line); border-radius:8px; padding:4px; min-width:0; }}
@@ -276,7 +289,23 @@ tr.now td.nm {{ font-weight:700; }}
 <h3>ローンチ別の日程</h3>
 <div class="legend"><span><i style="background:var(--now)"></i>進行中</span><span><i style="background:var(--accent)"></i>これから</span><span><i style="background:var(--past)"></i>終了</span><span><i style="background:#e0523f;width:2px"></i>今日</span></div>
 {cards}
-</main></body></html>"""
+</main>
+<script>
+const months = [...document.querySelectorAll(".month")];
+let cur = months.findIndex(m => !m.hidden);
+function show(i) {{
+  cur = Math.max(0, Math.min(months.length - 1, i));
+  months.forEach((m, j) => {{
+    m.hidden = j !== cur;
+    m.querySelector('[data-step="-1"]').disabled = j === 0;
+    m.querySelector('[data-step="1"]').disabled = j === months.length - 1;
+  }});
+}}
+document.querySelectorAll(".month-nav button").forEach(b =>
+  b.addEventListener("click", () => show(cur + Number(b.dataset.step))));
+show(cur);
+</script>
+</body></html>"""
 
 
 def main():
