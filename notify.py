@@ -62,9 +62,18 @@ def parse_date(s):
     return None
 
 
-def read_tasks(ws):
+def load_tabs(sh):
+    """通知対象のタブを1回のAPI呼び出しでまとめて読む → [(タブ名, Webhook環境変数名, 行)]"""
+    targets = [(ws.title, route_for(ws.title)) for ws in sh.worksheets()]
+    targets = [(tab, env) for tab, env in targets if env]
+    if not targets:
+        return []
+    res = sh.values_batch_get(["'" + tab.replace("'", "''") + "'" for tab, _ in targets])
+    return [(tab, env, vr.get("values", [])) for (tab, env), vr in zip(targets, res["valueRanges"])]
+
+
+def read_tasks(rows):
     """ヘッダー行（先頭セルが No）以降をタスクとして読む。"""
-    rows = ws.get_all_values()
     head_idx = next((i for i, r in enumerate(rows) if r and r[0].strip() == "No"), None)
     if head_idx is None:
         return []
@@ -167,11 +176,8 @@ def main():
     gc =gspread.service_account(filename=os.path.join(HERE, "google-credentials.json"))
     sh = gc.open_by_key(os.environ["GOOGLE_SHEETS_ID"])
     sent_any = False
-    for ws in sh.worksheets():
-        tab, webhook_env = ws.title, route_for(ws.title)
-        if not webhook_env:
-            continue
-        tasks = read_tasks(ws)
+    for tab, webhook_env, rows in load_tabs(sh):
+        tasks = read_tasks(rows)
         if not any(action_label(t, today) for t in tasks):
             continue
         sent_any = True
