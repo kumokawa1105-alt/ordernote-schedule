@@ -8,7 +8,7 @@ import html
 import os
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import gspread
 
@@ -123,10 +123,62 @@ def render_launch(ln, today, sent):
     </section>"""
 
 
+SHORT = {"開始＆終了日": "当日", "開始日": "開始", "終了日": "終了"}
+COLORS = ["#8e44ad", "#2f7d5b", "#c0622b", "#2b6cb0", "#b83280", "#7a7a2e"]
+
+
+def render_calendar(launches, today, sent):
+    """今月から、最後の通知がある月までの月間カレンダー（通知日に印）"""
+    events = {}
+    for ln in launches:
+        for d, tasks in notices(ln).items():
+            events.setdefault(d, []).append((ln, tasks))
+    last = max([d for d in events if d >= today], default=today)
+    months, y, m = [], today.year, today.month
+    while (y, m) <= (last.year, last.month):
+        months.append((y, m))
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+
+    legend = "".join(
+        f'<span><i style="background:{ln["color"]}"></i>{html.escape(ln["tab"])}</span>' for ln in launches
+    )
+    out = [f'<div class="legend">{legend}</div>']
+    for y, m in months:
+        cells = ['<div class="dow">' + d + "</div>" for d in "月火水木金土日"]
+        first = date(y, m, 1)
+        cells += ['<div class="day blank"></div>'] * first.weekday()
+        d = first
+        while d.month == m:
+            chips = []
+            for ln, tasks in events.get(d, []):
+                done = f"{d.isoformat()} {ln['tab']}" in sent
+                lines = "".join(
+                    f'<div class="ev">{SHORT[notify.action_label(t, d)]} '
+                    f'{html.escape(t["name"])}</div>'
+                    for t in tasks
+                )
+                chips.append(
+                    f'<div class="chip{" done" if done else ""}" style="--c:{ln["color"]}" '
+                    f'title="{html.escape(ln["tab"])}"><div class="chip-tab">{html.escape(ln["tab"])}</div>{lines}</div>'
+                )
+            cls = "day" + (" today" if d == today else "") + (" past" if d < today else "") + (" has" if chips else "")
+            dots = "".join(f'<i style="background:{ln["color"]}"></i>' for ln, _ in events.get(d, []))
+            cells.append(
+                f'<div class="{cls}"><div class="num">{d.day}<span class="dots">{dots}</span></div>{"".join(chips)}</div>'
+            )
+            d += timedelta(days=1)
+        out.append(f'<div class="month"><div class="month-title">{y}年{m}月</div><div class="cal">{"".join(cells)}</div></div>')
+    return "".join(out)
+
+
 def build(launches, today):
     sent = sent_keys()
     updated = datetime.now(notify.JST)
-    cards = "".join(render_launch(ln, today, sent) for ln in launches)
+    for i, ln in enumerate(launches):
+        ln["color"] = COLORS[i % len(COLORS)]
+    # 全タスクが終わったローンチは翌日から日程一覧に出さない
+    active = [ln for ln in launches if max(t["end"] for t in ln["tasks"]) >= today]
+    cards = "".join(render_launch(ln, today, sent) for ln in active) or '<p class="empty">進行中のローンチはありません</p>'
     return f"""<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -181,7 +233,28 @@ tr.now td.nm {{ font-weight:700; }}
 .legend {{ display:flex; gap:14px; font-size:12px; color:var(--muted); margin:8px 0 12px; flex-wrap:wrap; }}
 .legend i {{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }}
 .empty {{ color:var(--muted); }}
+.month {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px; }}
+.month-title {{ font-weight:700; font-size:16px; margin-bottom:8px; }}
+.cal {{ display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; }}
+.dow {{ text-align:center; font-size:12px; color:var(--muted); padding:2px 0; }}
+.day {{ min-height:92px; border:1px solid var(--line); border-radius:8px; padding:4px; min-width:0; }}
+.day.blank {{ border:none; }}
+.day.past {{ opacity:.45; }}
+.day.today {{ border-color:#e0523f; box-shadow:0 0 0 1px #e0523f; }}
+.num {{ font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }}
+.dots {{ display:none; gap:2px; }}
+.dots i {{ width:7px; height:7px; border-radius:50%; display:inline-block; }}
+.chip {{ margin-top:4px; border-left:3px solid var(--c); background:color-mix(in srgb, var(--c) 12%, transparent);
+  border-radius:4px; padding:2px 4px; font-size:11px; line-height:1.35; }}
+.chip.done {{ opacity:.6; }}
+.chip-tab {{ font-weight:700; color:var(--c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.ev {{ overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }}
+@media (prefers-color-scheme: dark) {{ .chip-tab {{ filter:brightness(1.5); }} }}
 @media (max-width:640px) {{
+  .day {{ min-height:44px; padding:3px; }}
+  .chip {{ display:none; }}
+  .dots {{ display:flex; }}
+  .num {{ flex-direction:column; gap:3px; }}
   .up {{ flex-direction:column; gap:6px; }}
   .up-date {{ width:auto; flex-direction:row; align-items:center; }}
   .meta {{ text-align:left; }}
@@ -198,6 +271,8 @@ tr.now td.nm {{ font-weight:700; }}
 </header>
 <h3>これからの通知</h3>
 {render_upcoming(launches, today, sent)}
+<h3>月間カレンダー</h3>
+{render_calendar(launches, today, sent)}
 <h3>ローンチ別の日程</h3>
 <div class="legend"><span><i style="background:var(--now)"></i>進行中</span><span><i style="background:var(--accent)"></i>これから</span><span><i style="background:var(--past)"></i>終了</span><span><i style="background:#e0523f;width:2px"></i>今日</span></div>
 {cards}
