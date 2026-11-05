@@ -1,0 +1,58 @@
+name: page
+
+# 通知予定ページ(schedule.html)を作り直して GitHub Pages に公開する。
+# 通知のあと（送信済みを反映）・2時間ごと（スプシの日程変更やタブ追加を反映）・コード変更時に動く。
+on:
+  workflow_run:
+    workflows: [daily-notify]
+    types: [completed]
+  schedule:
+    - cron: "17 */2 * * *"
+  push:
+    branches: [main]
+    paths: [notify.py, build_page.py, .github/workflows/page.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main  # 通知直後に追加された送信記録も読む
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存インストール
+        run: pip install -r requirements.txt
+
+      - name: シークレット復元
+        run: |
+          echo "GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}" > .env
+          printf '%s' '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > google-credentials.json
+
+      - name: ページ作成
+        run: |
+          TZ=Asia/Tokyo python build_page.py --no-open
+          mkdir _site && cp schedule.html _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -69,17 +69,17 @@ def render_upcoming(launches, today, sent):
     if not items:
         return '<p class="empty">今後の通知はありません</p>'
     rows = []
-    for d, ln, tasks in items[:12]:
+    for d, ln, tasks in items[:24]:  # 表示は先頭12件（日付が進んだらブラウザ側で過去分を隠す）
         diff = (d - today).days
         when = "今日" if diff == 0 else "明日" if diff == 1 else f"{diff}日後"
         done = f"{d.isoformat()} {ln['tab']}" in sent
-        status = '<span class="tag done">送信済み</span>' if done else f'<span class="tag">{when} 14:00</span>'
+        status = '<span class="tag done">送信済み</span>' if done else f'<span class="tag when">{when} 14:00</span>'
         acts = "".join(
             f'<li><b>{notify.action_label(t, d)}</b> No.{html.escape(t["no"])} {html.escape(t["name"])}</li>'
             for t in tasks
         )
         rows.append(f"""
-        <div class="up{' today' if diff == 0 else ''}">
+        <div class="up{' today' if diff == 0 else ''}" data-date="{d.isoformat()}">
           <div class="up-date"><span class="big">{jp(d)}</span>{status}</div>
           <div class="up-body">
             <div class="up-tab">{html.escape(ln['tab'])}<span class="ch">→ {html.escape(ln['channel'])}</span></div>
@@ -114,7 +114,7 @@ def render_launch(ln, today, sent):
         </tr>""")
     done = sum(1 for d in notices(ln) if f"{d.isoformat()} {ln['tab']}" in sent)
     return f"""
-    <section class="card">
+    <section class="card" data-end="{hi.isoformat()}">
       <div class="card-head">
         <div><h2>{html.escape(ln['tab'])}</h2><div class="ch">{html.escape(ln['channel'])}</div></div>
         <div class="meta"><div>{nxt}</div><div class="muted">{jp(lo)} 〜 {jp(hi)} ・ 通知{len(notices(ln))}回（送信済み{done}）</div></div>
@@ -165,7 +165,7 @@ def render_calendar(launches, today, sent):
             cls = "day" + (" today" if d == today else "") + (" past" if d < today else "") + (" has" if chips else "")
             dots = "".join(f'<i style="background:{ln["color"]}"></i>' for ln, _ in events.get(d, []))
             cells.append(
-                f'<div class="{cls}"><div class="num">{d.day}<span class="dots">{dots}</span></div>{"".join(chips)}</div>'
+                f'<div class="{cls}" data-date="{d.isoformat()}"><div class="num">{d.day}<span class="dots">{dots}</span></div>{"".join(chips)}</div>'
             )
             d += timedelta(days=1)
         shown = "" if (y, m) == (today.year, today.month) else " hidden"
@@ -190,6 +190,7 @@ def build(launches, today):
     return f"""<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>ローンチ通知予定</title>
 <style>
 :root {{
@@ -241,6 +242,7 @@ tr.now td.nm {{ font-weight:700; }}
 .legend {{ display:flex; gap:14px; font-size:12px; color:var(--muted); margin:8px 0 12px; flex-wrap:wrap; }}
 .legend i {{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }}
 .empty {{ color:var(--muted); }}
+[hidden] {{ display:none !important; }}
 .month {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px; }}
 .month-nav {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }}
 .month-title {{ font-weight:700; font-size:16px; }}
@@ -291,8 +293,27 @@ tr.now td.nm {{ font-weight:700; }}
 {cards}
 </main>
 <script>
+// ページを作り直す前でも「今日」がずれないよう、日付まわりはブラウザ側(JST)で計算し直す
+const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const days = d => Math.round((new Date(d) - new Date(today)) / 864e5);
+let shown = 0;
+document.querySelectorAll(".up").forEach(el => {{
+  const diff = days(el.dataset.date);
+  el.hidden = diff < 0 || shown >= 12;
+  if (!el.hidden) shown++;
+  el.classList.toggle("today", diff === 0);
+  const tag = el.querySelector(".when");
+  if (tag) tag.textContent = (diff === 0 ? "今日" : diff === 1 ? "明日" : diff + "日後") + " 14:00";
+}});
+document.querySelectorAll(".card[data-end]").forEach(el => {{ el.hidden = days(el.dataset.end) < 0; }});
+document.querySelectorAll(".day[data-date]").forEach(el => {{
+  const diff = days(el.dataset.date);
+  el.classList.toggle("today", diff === 0);
+  el.classList.toggle("past", diff < 0);
+}});
 const months = [...document.querySelectorAll(".month")];
-let cur = months.findIndex(m => !m.hidden);
+let cur = months.findIndex(m => m.querySelector(".day.today"));
+if (cur < 0) cur = months.findIndex(m => !m.hidden);
 function show(i) {{
   cur = Math.max(0, Math.min(months.length - 1, i));
   months.forEach((m, j) => {{
