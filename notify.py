@@ -10,6 +10,7 @@
   GOOGLE_SHEETS_ID           工程表スプシのID
   SLACK_WEBHOOK_ORDERNOTE    #オーダーノート_チャレンジローンチ のWebhook
   SLACK_WEBHOOK_HYPNO        #金運ヒプノ_チャレンジローンチ のWebhook
+  SLACK_WEBHOOK_POCKET       12月ポケットの送り先チャンネルのWebhook
 """
 import os
 import sys
@@ -29,6 +30,7 @@ TAB_ROUTES = {
     "11月オーダーノート": "SLACK_WEBHOOK_ORDERNOTE",
     "12月オーダーノート": "SLACK_WEBHOOK_ORDERNOTE",
     "11月金運ヒプノ": "SLACK_WEBHOOK_HYPNO",
+    "12月ポケット": "SLACK_WEBHOOK_POCKET",
 }
 
 

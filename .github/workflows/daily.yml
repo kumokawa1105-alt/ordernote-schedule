@@ -44,6 +44,7 @@ jobs:
           cat > .env <<ENV
           SLACK_WEBHOOK_ORDERNOTE=${{ secrets.SLACK_WEBHOOK_ORDERNOTE }}
           SLACK_WEBHOOK_HYPNO=${{ secrets.SLACK_WEBHOOK_HYPNO }}
+          SLACK_WEBHOOK_POCKET=${{ secrets.SLACK_WEBHOOK_POCKET }}
           GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}
           ENV
           printf '%s' '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > google-credentials.json
