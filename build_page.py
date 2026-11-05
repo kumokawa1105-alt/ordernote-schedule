@@ -15,6 +15,7 @@ import gspread
 import notify
 
 OUT = os.path.join(notify.HERE, "schedule.html")
+SHEET_URL = "https://docs.google.com/spreadsheets/d/13k7sY5oo-TbpZGCNBtwGkw3hQ5oqevDexaOC1rNd8FM/edit?gid=799557738#gid=799557738"
 
 # Webhook → Slackチャンネル名（表示用）
 CHANNELS = {
@@ -207,6 +208,9 @@ body {{ margin:0; background:var(--bg); color:var(--ink);
 main {{ max-width:1040px; margin:0 auto; padding:32px 16px 64px; }}
 header h1 {{ margin:0; font-size:24px; }}
 header p {{ margin:4px 0 0; color:var(--muted); font-size:13px; }}
+.sheet {{ display:inline-block; margin-top:12px; font-size:14px; font-weight:600; color:var(--accent); text-decoration:none;
+  border:1px solid var(--line); background:var(--card); border-radius:8px; padding:8px 14px; }}
+.sheet:hover {{ border-color:var(--accent); }}
 h3 {{ font-size:15px; margin:32px 0 12px; color:var(--muted); font-weight:600; }}
 .up {{ display:flex; gap:16px; background:var(--card); border:1px solid var(--line); border-radius:12px;
   padding:14px 16px; margin-bottom:8px; }}
@@ -283,14 +287,15 @@ tr.now td.nm {{ font-weight:700; }}
 <header>
   <h1>ローンチ通知予定</h1>
   <p>工程表スプシの開始日・終了日に、毎日14:00にSlackへ通知します ・ 更新 {updated:%Y/%m/%d %H:%M}</p>
+  <a class="sheet" href="{SHEET_URL}" target="_blank" rel="noopener">📊 工程表スプレッドシートを開く</a>
 </header>
 <h3>これからの通知</h3>
 {render_upcoming(launches, today, sent)}
-<h3>月間カレンダー</h3>
-{render_calendar(launches, today, sent)}
 <h3>ローンチ別の日程</h3>
 <div class="legend"><span><i style="background:var(--now)"></i>進行中</span><span><i style="background:var(--accent)"></i>これから</span><span><i style="background:var(--past)"></i>終了</span><span><i style="background:#e0523f;width:2px"></i>今日</span></div>
 {cards}
+<h3>月間カレンダー</h3>
+{render_calendar(launches, today, sent)}
 </main>
 <script>
 // ページを作り直す前でも「今日」がずれないよう、日付まわりはブラウザ側(JST)で計算し直す
