@@ -18,6 +18,13 @@ OUT = os.path.join(notify.HERE, "schedule.html")
 SHEET_URL = "https://docs.google.com/spreadsheets/d/13k7sY5oo-TbpZGCNBtwGkw3hQ5oqevDexaOC1rNd8FM/edit?gid=799557738#gid=799557738"
 
 # Webhook → Slackチャンネル名（表示用）
+# 商品ごとのライブ開始時刻（毎回固定）。タブ名にキーワードが入っていればその商品とみなす。
+PRODUCTS = [
+    {"name": "オーダーノート", "keyword": "オーダーノート", "days": ["21:00", "21:00", "13:00 / 21:00"]},
+    {"name": "ポケット", "keyword": "ポケット", "days": ["13:00 / 21:00", "13:00 / 21:00", "13:00 / 21:00"]},
+    {"name": "金運ヒプノ", "keyword": "金運ヒプノ", "days": ["20:00", "20:00", "13:00 / 20:00"]},
+]
+
 CHANNELS = {
     "SLACK_WEBHOOK_ORDERNOTE": "#オーダーノート_チャレンジローンチ",
     "SLACK_WEBHOOK_HYPNO": "#金運ヒプノ_チャレンジローンチ",
@@ -179,6 +186,36 @@ def render_calendar(launches, today, sent):
     return "".join(out)
 
 
+def render_products(launches, today):
+    """上部：商品ごとのライブ開始時刻と、次の本番日"""
+    cards = []
+    for p in PRODUCTS:
+        times = "".join(f'<div class="pt-row"><span>Day{i}</span><b>{at}</b></div>' for i, at in enumerate(p["days"], 1))
+        lives = []
+        for ln in launches:
+            if p["keyword"] not in ln["tab"]:
+                continue
+            shows = sorted((t for t in ln["tasks"] if t["phase"].startswith("本番")), key=lambda t: t["start"])
+            for i, t in enumerate(shows):
+                at = p["days"][min(i, len(p["days"]) - 1)]
+                lives.append((t["start"], ln["tab"], t["phase"], at))
+        lives.sort()
+        rows = "".join(
+            f'<li data-date="{d.isoformat()}"><span class="pl-date">{jp(d)}</span>'
+            f'<span class="pl-at">{at}</span><span class="pl-tab">{html.escape(tab)} {html.escape(ph.replace("本番", "Day"))}</span></li>'
+            for d, tab, ph, at in lives
+        )
+        cards.append(f"""
+        <div class="pt">
+          <div class="pt-name">{p["name"]}</div>
+          <div class="pt-times">{times}</div>
+          <div class="pt-next">次の本番</div>
+          <ul class="pl">{rows}</ul>
+          <div class="pl-none"{"" if not rows else " hidden"}>予定なし</div>
+        </div>""")
+    return f'<div class="pts">{"".join(cards)}</div>'
+
+
 def build(launches, today):
     sent = sent_keys()
     updated = datetime.now(notify.JST)
@@ -245,6 +282,20 @@ tr.now td.nm {{ font-weight:700; }}
 .legend {{ display:flex; gap:14px; font-size:12px; color:var(--muted); margin:8px 0 12px; flex-wrap:wrap; }}
 .legend i {{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }}
 .empty {{ color:var(--muted); }}
+.pts {{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }}
+.pt {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }}
+.pt-name {{ font-weight:700; font-size:16px; margin-bottom:8px; }}
+.pt-row {{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:2px 0; }}
+.pt-row span {{ color:var(--muted); font-size:13px; }}
+.pt-row b {{ font-size:20px; letter-spacing:.02em; font-variant-numeric:tabular-nums; }}
+.pt-next {{ margin-top:12px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }}
+.pl {{ list-style:none; margin:4px 0 0; padding:0; font-size:13px; }}
+.pl li {{ display:grid; grid-template-columns:auto auto 1fr; gap:8px; padding:3px 0; align-items:baseline; }}
+.pl-date {{ font-weight:600; }}
+.pl-at {{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }}
+.pl-tab {{ color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.pl-none {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+@media (max-width:760px) {{ .pts {{ grid-template-columns:1fr; }} }}
 [hidden] {{ display:none !important; }}
 .month {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px; }}
 .month-nav {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }}
@@ -288,6 +339,8 @@ tr.now td.nm {{ font-weight:700; }}
   <p>工程表スプシの開始日・終了日に、毎日14:00にSlackへ通知します ・ 更新 {updated:%Y/%m/%d %H:%M}</p>
   <a class="sheet" href="{SHEET_URL}" target="_blank" rel="noopener">📊 工程表スプレッドシートを開く</a>
 </header>
+<h3>ライブ開始時刻</h3>
+{render_products(launches, today)}
 <h3>これからの通知</h3>
 {render_upcoming(launches, today, sent)}
 <h3>ローンチ別の日程</h3>
@@ -314,6 +367,14 @@ document.querySelectorAll(".day[data-date]").forEach(el => {{
   const diff = days(el.dataset.date);
   el.classList.toggle("today", diff === 0);
   el.classList.toggle("past", diff < 0);
+}});
+document.querySelectorAll(".pt").forEach(card => {{
+  let n = 0;
+  card.querySelectorAll(".pl li").forEach(li => {{
+    li.hidden = days(li.dataset.date) < 0 || n >= 3;
+    if (!li.hidden) n++;
+  }});
+  card.querySelector(".pl-none").hidden = n > 0;
 }});
 const months = [...document.querySelectorAll(".month")];
 let cur = months.findIndex(m => m.querySelector(".day.today"));
