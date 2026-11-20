@@ -35,8 +35,12 @@ KEYWORD_ROUTES = {
 }
 
 
+# タブ名にこの言葉が入っていたら通知しない（ページにも出さない）
+EXCLUDE_WORDS = ["テンプレート", "世界ちゃん"]
+
+
 def route_for(tab):
-    if "テンプレート" in tab:
+    if any(w in tab for w in EXCLUDE_WORDS):
         return None
     return next((env for kw, env in KEYWORD_ROUTES.items() if kw in tab), None)
 
