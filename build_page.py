@@ -15,6 +15,7 @@ import gspread
 import notify
 
 OUT = os.path.join(notify.HERE, "schedule.html")
+DOC_URL = "https://docs.google.com/document/d/1ZiW0rfjJHNpUAIGrjKXLOpJi7hNMdt5-NRBPwwm6jog/edit?tab=t.0"
 SHEET_URL = "https://docs.google.com/spreadsheets/d/13k7sY5oo-TbpZGCNBtwGkw3hQ5oqevDexaOC1rNd8FM/edit?gid=799557738#gid=799557738"
 
 # Webhook → Slackチャンネル名（表示用）
@@ -246,6 +247,8 @@ header h1 {{ margin:0; font-size:24px; }}
 header p {{ margin:4px 0 0; color:var(--muted); font-size:13px; }}
 .sheet {{ display:inline-block; margin-top:12px; font-size:14px; font-weight:600; color:var(--accent); text-decoration:none;
   border:1px solid var(--line); background:var(--card); border-radius:8px; padding:8px 14px; }}
+.links {{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:12px; }}
+.links .sheet {{ margin-top:0; }}
 .sheet:hover {{ border-color:var(--accent); }}
 h3 {{ font-size:15px; margin:32px 0 12px; color:var(--muted); font-weight:600; }}
 .up {{ display:flex; gap:16px; background:var(--card); border:1px solid var(--line); border-radius:12px;
@@ -337,7 +340,10 @@ tr.now td.nm {{ font-weight:700; }}
 <header>
   <h1>ローンチ通知予定</h1>
   <p>工程表スプシの開始日・終了日に、毎日14:00にSlackへ通知します ・ 更新 {updated:%Y/%m/%d %H:%M}</p>
-  <a class="sheet" href="{SHEET_URL}" target="_blank" rel="noopener">📊 工程表スプレッドシートを開く</a>
+  <div class="links">
+    <a class="sheet" href="{SHEET_URL}" target="_blank" rel="noopener">📊 工程表スプレッドシートを開く</a>
+    <a class="sheet" href="{DOC_URL}" target="_blank" rel="noopener">📅 カレンダーを開く</a>
+  </div>
 </header>
 <h3>ライブ開始時刻</h3>
 {render_products(launches, today)}
